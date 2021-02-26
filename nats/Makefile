@@ -8,12 +8,7 @@ NAME          := $(shell cargo metadata --no-deps --format-version 1 | jq -r '.p
 LIBNAME       := $(shell echo $(NAME) | tr '-' '_')
 VENDOR        := waSCC
 
-TARGETS := armv7-unknown-linux-gnueabihf \
-	aarch64-unknown-linux-gnu \
-	x86_64-apple-darwin \
-	x86_64-pc-windows-gnu \
-	x86_64-unknown-linux-gnu
-
+TARGETS := x86_64-apple-darwin
 # not currently supported
 MIPS_TARGETS := mips-unknown-linux-gnu \
 	mipsel-unknown-linux-gnu \
@@ -21,50 +16,23 @@ MIPS_TARGETS := mips-unknown-linux-gnu \
 	mips64el-unknown-linux-gnuabi64
 
 $(TARGETS):
-	cross build --target $@ --release
+	cross build --target $@
 
 par: $(TARGETS)
 	wash par create \
-		--arch arm-linux \
-		--binary target/armv7-unknown-linux-gnueabihf/release/lib$(LIBNAME).so \
+		--arch x86_64-macos \
+		--binary target/x86_64-apple-darwin/debug/lib$(LIBNAME).dylib \
 		--capid $(CAPABILITY_ID) \
 		--name $(NAME) \
 		--vendor $(VENDOR) \
-		--compress
-	wash par insert \
-		--arch aarch64-linux \
-		--binary target/aarch64-unknown-linux-gnu/release/lib$(LIBNAME).so \
+		--compress \
 		lib$(LIBNAME).par.gz
-	wash par insert \
+par2:
+	wash par create \
 		--arch x86_64-macos \
-		--binary target/x86_64-apple-darwin/release/lib$(LIBNAME).dylib \
-		lib$(LIBNAME).par.gz
-	wash par insert \
-		--arch x86_64-windows \
-		--binary target/x86_64-pc-windows-gnu/release/$(LIBNAME).dll \
-		lib$(LIBNAME).par.gz
-	wash par insert \
-		--arch x86_64-linux \
-		--binary target/x86_64-unknown-linux-gnu/release/lib$(LIBNAME).so \
-		lib$(LIBNAME).par.gz
-
-$(MIPS_TARGETS):
-	cross build --target $@ --release
-
-par-mips: $(MIPS_TARGETS) par 
-	wash par insert \
-		--arch mips-linux \
-		--binary target/mips-unknown-linux-gnu/release/lib$(LIBNAME).so \
-		lib$(LIBNAME).par.gz
-	wash par insert \
-		--arch mipsel-linux \
-		--binary target/mipsel-unknown-linux-gnu/release/lib$(LIBNAME).so \
-		lib$(LIBNAME).par.gz
-	wash par insert \
-		--arch mips64-linux \
-		--binary target/mips64-unknown-linux-gnuabi64/release/lib$(LIBNAME).so \
-		lib$(LIBNAME).par.gz
-	wash par insert \
-		--arch mips64el-linux \
-		--binary target/mips64el-unknown-linux-gnuabi64/release/lib$(LIBNAME).so \
+		--binary target/debug/lib$(LIBNAME).dylib \
+		--capid $(CAPABILITY_ID) \
+		--name $(NAME) \
+		--vendor $(VENDOR) \
+		--compress \
 		lib$(LIBNAME).par.gz

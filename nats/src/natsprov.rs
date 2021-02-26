@@ -7,7 +7,7 @@ use wascc_codec::capabilities::Dispatcher;
 
 use crate::OP_DELIVER_MESSAGE;
 use nats::Connection;
-use wascc_codec::serialize;
+use wascc_codec::{serialize,deserialize};
 
 const ENV_NATS_SUBSCRIPTION: &str = "SUBSCRIPTION";
 const ENV_NATS_URL: &str = "URL";
@@ -58,10 +58,12 @@ pub(crate) fn initialize_client(
     actor: &str,
     values: &HashMap<String, String>,
 ) -> Result<Connection, Box<dyn Error + Sync + Send>> {
+    info!("initialize_client");
     let c = get_connection(values)?;
 
     match values.get(ENV_NATS_SUBSCRIPTION) {
         Some(ref subs) => {
+            info!("new {:?}",subs);
             let subs: Vec<_> = subs
                 .split(',')
                 .map(|s| {
@@ -89,10 +91,11 @@ fn create_subscription(
     client: &Connection,
     sub: String,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
+    info!("create_subscription");
     let actor = actor.to_string();
     let _ = match values.get(ENV_NATS_QUEUEGROUP_NAME) {
         Some(qgroup) => {
-            trace!("Queue subscribing '{}' to '{}'", qgroup, sub);
+            info!("Queue subscribing '{}' to '{}'", qgroup, sub);
             client
                 .queue_subscribe(&sub, qgroup)?
                 .with_handler(move |msg| {
@@ -107,15 +110,28 @@ fn create_subscription(
                 })
         }
         None => {
-            trace!("Subscribing to '{}'", sub);
+            info!("Subscribing to '{}'", sub);
 
             client.subscribe(&sub)?.with_handler(move |msg| {
+                info!("msg {}",msg.clone());
                 let dm = delivermessage_for_natsmessage(&msg);
-                let buf = serialize(&dm).unwrap();
+                let z = serialize(&dm);
+                info!("z {:?}",z);
+                let buf =z.unwrap();
+                info!("buf");
                 let d = dispatcher.read().unwrap();
-                if let Err(e) = d.dispatch(&actor, OP_DELIVER_MESSAGE, &buf) {
-                    error!("Dispatch failed: {}", e);
+                info!("d");
+                let l = d.dispatch(&actor,OP_DELIVER_MESSAGE, &buf);
+                info!("Dispatch l: {:?}", l);
+                if let Ok(buf) = l{
+                  let broker_msg:BrokerMessage = deserialize(&buf).unwrap();
+                  msg.respond(broker_msg.body)?;
                 }
+                /*
+                if let Err(e) = d.dispatch(&actor, OP_DELIVER_MESSAGE, &buf) {
+                  info!("Dispatch failed: {}", e);
+                }
+                */
                 Ok(())
             })
         }
@@ -140,7 +156,7 @@ fn get_connection(
         None => "nats://0.0.0.0:4222",
     }
     .to_string();
-    info!("NATS provider host: {}", nats_url);
+    //info!("NATS provider host: {}", nats_url);
     let mut opts = if let Some(creds) = get_credsfile(values) {
         nats::Options::with_credentials(creds)
     } else {

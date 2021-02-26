@@ -157,7 +157,7 @@ impl CapabilityProvider for NatsProvider {
         msg: &[u8],
     ) -> Result<Vec<u8>, Box<dyn Error + Sync + Send>> {
         trace!("Received host call from {}, operation - {}", actor, op);
-
+        info!("handle_call");
         match op {
             OP_PUBLISH_MESSAGE => self.publish_message(actor, deserialize(msg)?),
             OP_PERFORM_REQUEST => self.request(actor, deserialize(msg)?),

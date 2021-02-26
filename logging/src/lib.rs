@@ -22,7 +22,6 @@ use codec::capabilities::{
 use codec::core::{OP_BIND_ACTOR, OP_REMOVE_ACTOR};
 use codec::{
     deserialize,
-    logging::{WriteLogRequest, OP_LOG},
     serialize,
 };
 
@@ -30,25 +29,30 @@ use codec::{
 extern crate log;
 
 use std::error::Error;
+use std::sync::Arc;
 use std::sync::RwLock;
+mod generated;
+use crate::generated::{WriteLogArgs, WriteLogRequest};
 
 #[cfg(not(feature = "static_plugin"))]
 capability_provider!(LoggingProvider, LoggingProvider::new);
 
 const CAPABILITY_ID: &str = "wascc:logging";
+pub const OP_LOG: &str = "WriteLog";
 const SYSTEM_ACTOR: &str = "system";
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const REVISION: u32 = 2; // Increment for each crates publish
 
-const ERROR: u32 = 1;
-const WARN: u32 = 2;
-const INFO: u32 = 3;
-const DEBUG: u32 = 4;
-const TRACE: u32 = 5;
+const ERROR: u8 = 1;
+const WARN: u8 = 2;
+const INFO: u8 = 3;
+const DEBUG: u8 = 4;
+const TRACE: u8 = 5;
 
 /// Standard output logging implementation of the `wascc:logging` specification
+#[derive(Clone)]
 pub struct LoggingProvider {
-    dispatcher: RwLock<Box<dyn Dispatcher>>,
+    dispatcher: Arc<RwLock<Box<dyn Dispatcher>>>,
 }
 
 impl Default for LoggingProvider {
@@ -59,7 +63,7 @@ impl Default for LoggingProvider {
         }
 
         LoggingProvider {
-            dispatcher: RwLock::new(Box::new(NullDispatcher::new())),
+            dispatcher: Arc::new(RwLock::new(Box::new(NullDispatcher::new()))),
         }
     }
 }
@@ -94,6 +98,8 @@ impl LoggingProvider {
         actor: &str,
         log_msg: WriteLogRequest,
     ) -> Result<Vec<u8>, Box<dyn Error + Sync + Send>> {
+        info!("log_msg {:?}",log_msg);
+        
         match log_msg.level {
             ERROR => error!("[{}] {}", actor, log_msg.body),
             WARN => warn!("[{}] {}", actor, log_msg.body),
@@ -127,12 +133,18 @@ impl CapabilityProvider for LoggingProvider {
         op: &str,
         msg: &[u8],
     ) -> Result<Vec<u8>, Box<dyn Error + Sync + Send>> {
+        info!("op {:?}",op);
         match op {
             OP_BIND_ACTOR if actor == SYSTEM_ACTOR => Ok(vec![]),
             OP_REMOVE_ACTOR if actor == SYSTEM_ACTOR => Ok(vec![]),
             OP_GET_CAPABILITY_DESCRIPTOR if actor == SYSTEM_ACTOR => self.get_descriptor(),
-            OP_LOG => self.write_log(actor, deserialize(msg)?),
+            OP_LOG => {
+              let m= deserialize::<WriteLogArgs>(msg.clone());
+              info!("op11 {:?}",m);
+              self.write_log(actor, m.unwrap().request)
+              },
             _ => Err(format!("Unknown operation: {}", op).into()),
         }
     }
+    fn stop(&self) {}
 }
